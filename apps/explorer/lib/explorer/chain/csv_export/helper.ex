@@ -12,6 +12,7 @@ defmodule Explorer.Chain.CSVExport.Helper do
       where: 3
     ]
 
+  @limit 10_000
   @page_size 150
   @default_paging_options %PagingOptions{page_size: @page_size}
 
@@ -24,11 +25,7 @@ defmodule Explorer.Chain.CSVExport.Helper do
 
   def default_paging_options, do: @default_paging_options
 
-  @spec limit() :: integer()
-  def limit, do: Application.get_env(:explorer, :csv_export_limit)
-
-  @spec paging_options() :: Explorer.PagingOptions.t()
-  def paging_options, do: %PagingOptions{page_size: limit()}
+  def limit, do: @limit
 
   def block_from_period(from_period, to_period) do
     from_block = Chain.convert_date_to_min_block(from_period)
@@ -114,5 +111,11 @@ defmodule Explorer.Chain.CSVExport.Helper do
       _ ->
         true
     end
+  end
+
+  @spec captcha_helper() :: module()
+  def captcha_helper do
+    :block_scout_web
+    |> Application.get_env(:captcha_helper)
   end
 end

@@ -15,13 +15,14 @@ defmodule Indexer.Fetcher.OnDemand.TokenInstanceMetadataRefetch do
   alias Explorer.Token.MetadataRetriever
   alias Explorer.Utility.TokenInstanceMetadataRefetchAttempt
   alias Indexer.Fetcher.TokenInstance.Helper, as: TokenInstanceHelper
-  alias Indexer.NFTMediaHandler.Queue
 
   @max_delay :timer.hours(168)
 
   @spec trigger_refetch(TokenInstance.t()) :: :ok
   def trigger_refetch(token_instance) do
-    GenServer.cast(__MODULE__, {:refetch, token_instance})
+    unless is_nil(token_instance.metadata) do
+      GenServer.cast(__MODULE__, {:refetch, token_instance})
+    end
   end
 
   defp fetch_metadata(token_instance, state) do
@@ -47,7 +48,7 @@ defmodule Indexer.Fetcher.OnDemand.TokenInstanceMetadataRefetch do
   end
 
   defp fetch_and_broadcast_metadata(token_instance, _state) do
-    from_base_uri? = Application.get_env(:indexer, TokenInstanceHelper)[:base_uri_retry?]
+    from_base_uri? = Application.get_env(:indexer, __MODULE__)[:base_uri_retry?]
 
     token_id = TokenInstanceHelper.prepare_token_id(token_instance.token_id)
     contract_address_hash_string = to_string(token_instance.token_contract_address_hash)
@@ -78,15 +79,13 @@ defmodule Indexer.Fetcher.OnDemand.TokenInstanceMetadataRefetch do
         %{fetched_token_instance_metadata: [to_string(token_instance.token_contract_address_hash), token_id, metadata]},
         :on_demand
       )
-
-      Queue.process_new_instance({:ok, %TokenInstance{token_instance | metadata: metadata}})
     else
       {:empty_result, true} ->
         :ok
 
-      {:fetched_metadata, error} ->
+      {:fetched_metadata, _error} ->
         Logger.error(fn ->
-          "Error while refetching metadata for {#{token_instance.token_contract_address_hash}, #{token_id}}: #{inspect(error)}"
+          "Error while setting address #{inspect(to_string(token_instance.token_contract_address_hash))} metadata"
         end)
 
         TokenInstanceMetadataRefetchAttempt.insert_retries_number(

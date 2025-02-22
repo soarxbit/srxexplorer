@@ -2,11 +2,10 @@ defmodule BlockScoutWeb.API.V2.Helper do
   @moduledoc """
     API V2 helper
   """
-  use Utils.CompileTimeEnvHelper, chain_type: [:explorer, :chain_type]
 
   alias Ecto.Association.NotLoaded
-  alias Explorer.Chain.Address
-  alias Explorer.Chain.SmartContract.Proxy
+  alias Explorer.Chain
+  alias Explorer.Chain.{Address, Hash}
   alias Explorer.Chain.Transaction.History.TransactionStats
 
   import BlockScoutWeb.Account.AuthController, only: [current_user: 1]
@@ -65,30 +64,36 @@ defmodule BlockScoutWeb.API.V2.Helper do
   def address_with_info(%Address{} = address, _address_hash) do
     smart_contract? = Address.smart_contract?(address)
 
-    proxy_implementations =
+    {proxy_implementations, implementation_address_hashes, implementation_names, implementation_address,
+     implementation_name} =
       case address.proxy_implementations do
         %NotLoaded{} ->
-          nil
+          {nil, [], [], nil, nil}
 
         nil ->
-          nil
+          {nil, [], [], nil, nil}
 
         proxy_implementations ->
-          proxy_implementations
+          address_hashes = proxy_implementations.address_hashes
+          names = proxy_implementations.names
+
+          address_hash = Enum.at(address_hashes, 0) && address_hashes |> Enum.at(0) |> Address.checksum()
+
+          {proxy_implementations, address_hashes, names, address_hash, Enum.at(names, 0)}
       end
 
     %{
       "hash" => Address.checksum(address),
       "is_contract" => smart_contract?,
       "name" => address_name(address),
-      "is_scam" => address_marked_as_scam?(address),
-      "proxy_type" => proxy_implementations && proxy_implementations.proxy_type,
-      "implementations" => Proxy.proxy_object_info(proxy_implementations),
+      # todo: added for backward compatibility, remove when frontend unbound from these props
+      "implementation_address" => implementation_address,
+      "implementation_name" => implementation_name,
+      "implementations" => proxy_object_info(implementation_address_hashes, implementation_names),
       "is_verified" => verified?(address) || verified_minimal_proxy?(proxy_implementations),
       "ens_domain_name" => address.ens_domain_name,
       "metadata" => address.metadata
     }
-    |> address_chain_type_fields(address)
   end
 
   def address_with_info(%NotLoaded{}, address_hash) do
@@ -111,7 +116,9 @@ defmodule BlockScoutWeb.API.V2.Helper do
       "hash" => Address.checksum(address_hash),
       "is_contract" => false,
       "name" => nil,
-      "proxy_type" => nil,
+      # todo: added for backward compatibility, remove when frontend unbound from these props
+      "implementation_address" => nil,
+      "implementation_name" => nil,
       "implementations" => [],
       "is_verified" => nil,
       "ens_domain_name" => nil,
@@ -119,17 +126,39 @@ defmodule BlockScoutWeb.API.V2.Helper do
     }
   end
 
-  case @chain_type do
-    :filecoin ->
-      defp address_chain_type_fields(result, address) do
-        # credo:disable-for-next-line Credo.Check.Design.AliasUsage
-        BlockScoutWeb.API.V2.FilecoinView.extend_address_json_response(result, address)
-      end
+  @doc """
+  Retrieves formatted proxy object based on its implementation addresses and names.
 
-    _ ->
-      defp address_chain_type_fields(result, _address) do
-        result
+  ## Parameters
+
+    * `implementation_addresses` - A list of implementation addresses for the proxy object.
+    * `implementation_names` - A list of implementation names for the proxy object.
+
+  ## Returns
+
+  A list of maps containing information about the proxy object.
+
+  """
+  @spec proxy_object_info([String.t() | Hash.Address.t()], [String.t() | nil]) :: [map()]
+  def proxy_object_info([], []), do: []
+
+  def proxy_object_info(implementation_addresses, implementation_names) do
+    implementation_addresses
+    |> Enum.zip(implementation_names)
+    |> Enum.reduce([], fn {address, name}, acc ->
+      case address do
+        %Hash{} = address_hash ->
+          [%{"address" => Address.checksum(address_hash), "name" => name} | acc]
+
+        _ ->
+          with {:ok, address_hash} <- Chain.string_to_address_hash(address),
+               checksummed_address <- Address.checksum(address_hash) do
+            [%{"address" => checksummed_address, "name" => name} | acc]
+          else
+            _ -> acc
+          end
       end
+    end)
   end
 
   defp minimal_proxy_pattern?(proxy_implementations) do
@@ -146,8 +175,7 @@ defmodule BlockScoutWeb.API.V2.Helper do
   def address_name(%Address{names: [_ | _] = address_names}) do
     case Enum.find(address_names, &(&1.primary == true)) do
       nil ->
-        # take last created address name, if there is no `primary` one.
-        %Address.Name{name: name} = Enum.max_by(address_names, & &1.id)
+        %Address.Name{name: name} = Enum.at(address_names, 0)
         name
 
       %Address.Name{name: name} ->
@@ -156,16 +184,6 @@ defmodule BlockScoutWeb.API.V2.Helper do
   end
 
   def address_name(_), do: nil
-
-  def address_marked_as_scam?(%Address{scam_badge: %Ecto.Association.NotLoaded{}}) do
-    false
-  end
-
-  def address_marked_as_scam?(%Address{scam_badge: scam_badge}) when not is_nil(scam_badge) do
-    true
-  end
-
-  def address_marked_as_scam?(_), do: false
 
   def verified?(%Address{smart_contract: nil}), do: false
   def verified?(%Address{smart_contract: %{metadata_from_verified_bytecode_twin: true}}), do: false

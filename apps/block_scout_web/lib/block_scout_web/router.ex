@@ -1,18 +1,12 @@
 defmodule BlockScoutWeb.Router do
   use BlockScoutWeb, :router
 
-  use Utils.CompileTimeEnvHelper,
-    admin_panel_enabled: [:block_scout_web, :admin_panel_enabled],
-    graphql_enabled: [:block_scout_web, [Api.GraphQL, :enabled]],
-    api_router_reading_enabled: [:block_scout_web, [BlockScoutWeb.Routers.ApiRouter, :reading_enabled]],
-    web_router_enabled: [:block_scout_web, [BlockScoutWeb.Routers.WebRouter, :enabled]]
-
   alias BlockScoutWeb.Plug.{GraphQL, RateLimit}
-  alias BlockScoutWeb.Routers.{AccountRouter, ApiRouter}
+  alias BlockScoutWeb.Routers.{AccountRouter, ApiRouter, WebRouter}
 
   @max_query_string_length 5_000
 
-  if @admin_panel_enabled do
+  if Application.compile_env(:block_scout_web, :admin_panel_enabled) do
     forward("/admin", BlockScoutWeb.Routers.AdminRouter)
   end
 
@@ -68,7 +62,8 @@ defmodule BlockScoutWeb.Router do
   scope "/graphiql" do
     pipe_through(:api_v1_graphql)
 
-    if @graphql_enabled && @api_router_reading_enabled do
+    if Application.compile_env(:block_scout_web, Api.GraphQL)[:enabled] &&
+         Application.compile_env(:block_scout_web, ApiRouter)[:reading_enabled] do
       forward("/", Absinthe.Plug.GraphiQL,
         schema: BlockScoutWeb.GraphQL.Schema,
         interface: :advanced,
@@ -84,7 +79,7 @@ defmodule BlockScoutWeb.Router do
     get("/robots.txt", RobotsController, :robots)
     get("/sitemap.xml", RobotsController, :sitemap)
 
-    if @api_router_reading_enabled do
+    if Application.compile_env(:block_scout_web, ApiRouter)[:reading_enabled] do
       get("/api-docs", APIDocsController, :index)
       get("/eth-rpc-api-docs", APIDocsController, :eth_rpc)
     else
@@ -99,7 +94,7 @@ defmodule BlockScoutWeb.Router do
     post("/contract_verifications", BlockScoutWeb.AddressContractVerificationController, :create)
   end
 
-  if @web_router_enabled do
+  if Application.compile_env(:block_scout_web, WebRouter)[:enabled] do
     forward("/", BlockScoutWeb.Routers.WebRouter)
   end
 end

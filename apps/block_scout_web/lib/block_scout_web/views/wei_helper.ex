@@ -3,7 +3,7 @@ defmodule BlockScoutWeb.WeiHelper do
   Helper functions for interacting with `t:Explorer.Chain.Wei.t/0` values.
   """
 
-  use Gettext, backend: BlockScoutWeb.Gettext
+  import BlockScoutWeb.Gettext
 
   alias BlockScoutWeb.CldrHelper
   alias Explorer.Chain.Wei

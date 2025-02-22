@@ -12,12 +12,11 @@ config :explorer,
     transport: EthereumJSONRPC.HTTP,
     transport_options: [
       http: EthereumJSONRPC.HTTP.HTTPoison,
-      urls: ConfigHelper.parse_urls_list(:http),
-      eth_call_urls: ConfigHelper.parse_urls_list(:eth_call),
-      fallback_urls: ConfigHelper.parse_urls_list(:fallback_http),
-      fallback_eth_call_urls: ConfigHelper.parse_urls_list(:fallback_eth_call),
+      url: System.get_env("ETHEREUM_JSONRPC_HTTP_URL"),
+      fallback_url: System.get_env("ETHEREUM_JSONRPC_FALLBACK_HTTP_URL"),
+      fallback_eth_call_url: System.get_env("ETHEREUM_JSONRPC_FALLBACK_ETH_CALL_URL"),
       method_to_url: [
-        eth_call: :eth_call
+        eth_call: ConfigHelper.eth_call_url()
       ],
       http_options: [recv_timeout: timeout, timeout: timeout, hackney: hackney_opts]
     ],
@@ -27,8 +26,7 @@ config :explorer,
     transport: EthereumJSONRPC.WebSocket,
     transport_options: [
       web_socket: EthereumJSONRPC.WebSocket.WebSocketClient,
-      url: System.get_env("ETHEREUM_JSONRPC_WS_URL"),
-      fallback_url: System.get_env("ETHEREUM_JSONRPC_FALLBACK_WS_URL")
+      url: System.get_env("ETHEREUM_JSONRPC_WS_URL")
     ],
     variant: EthereumJSONRPC.Ganache
   ]

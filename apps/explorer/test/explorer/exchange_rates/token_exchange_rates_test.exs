@@ -19,8 +19,7 @@ defmodule Explorer.TokenExchangeRatesTest do
         interval: 0,
         platform: "ethereum",
         currency: "usd",
-        enabled: true,
-        source: Explorer.ExchangeRates.Source.CoinGecko
+        enabled: true
       )
 
       on_exit(fn ->

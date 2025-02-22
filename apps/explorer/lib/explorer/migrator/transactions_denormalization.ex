@@ -18,16 +18,13 @@ defmodule Explorer.Migrator.TransactionsDenormalization do
   def migration_name, do: @migration_name
 
   @impl FillingMigration
-  def last_unprocessed_identifiers(state) do
+  def last_unprocessed_identifiers do
     limit = batch_size() * concurrency()
 
-    ids =
-      unprocessed_data_query()
-      |> select([t], t.hash)
-      |> limit(^limit)
-      |> Repo.all(timeout: :infinity)
-
-    {ids, state}
+    unprocessed_data_query()
+    |> select([t], t.hash)
+    |> limit(^limit)
+    |> Repo.all(timeout: :infinity)
   end
 
   @impl FillingMigration

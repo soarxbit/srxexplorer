@@ -3,8 +3,7 @@ defmodule Indexer.BufferedTaskTest do
 
   import Mox
 
-  alias Explorer.BoundQueue
-  alias Indexer.BufferedTask
+  alias Indexer.{BoundQueue, BufferedTask}
   alias Indexer.BufferedTaskTest.{RetryableTask, ShrinkableTask}
 
   @max_batch_size 2

@@ -2,7 +2,6 @@ import Config
 
 alias EthereumJSONRPC.Variant
 
-config :ethereum_jsonrpc, EthereumJSONRPC.Utility.EndpointAvailabilityChecker, enabled: false
 config :explorer, Explorer.ExchangeRates, enabled: false, store: :none
 
 config :ueberauth, Ueberauth.Strategy.Auth0.OAuth,

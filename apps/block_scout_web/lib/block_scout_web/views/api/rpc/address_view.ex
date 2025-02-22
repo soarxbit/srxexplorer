@@ -3,7 +3,6 @@ defmodule BlockScoutWeb.API.RPC.AddressView do
 
   alias BlockScoutWeb.API.EthRPC.View, as: EthRPCView
   alias BlockScoutWeb.API.RPC.RPCView
-  alias Explorer.Chain.DenormalizationHelper
 
   def render("listaccounts.json", %{accounts: accounts}) do
     accounts = Enum.map(accounts, &prepare_account/1)
@@ -211,16 +210,9 @@ defmodule BlockScoutWeb.API.RPC.AddressView do
   end
 
   defp prepare_nft_transfer(token_transfer, max_block_number) do
-    timestamp =
-      if DenormalizationHelper.tt_denormalization_finished?() do
-        to_string(DateTime.to_unix(token_transfer.transaction.block_timestamp))
-      else
-        to_string(DateTime.to_unix(token_transfer.block.timestamp))
-      end
-
     %{
       "blockNumber" => to_string(token_transfer.block_number),
-      "timeStamp" => timestamp,
+      "timeStamp" => to_string(DateTime.to_unix(token_transfer.block.timestamp)),
       "hash" => to_string(token_transfer.transaction_hash),
       "nonce" => to_string(token_transfer.transaction.nonce),
       "blockHash" => to_string(token_transfer.block_hash),

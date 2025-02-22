@@ -10,17 +10,17 @@ defmodule Indexer.MixProject do
       deps: deps(),
       deps_path: "../../deps",
       description: "Fetches block chain data from on-chain node for later reading with Explorer.",
-      elixir: "~> 1.17",
+      elixir: "~> 1.13",
       elixirc_paths: elixirc_paths(Mix.env()),
       lockfile: "../../mix.lock",
       start_permanent: Mix.env() == :prod,
-      version: "7.0.0",
+      version: "6.7.2",
       xref: [
         exclude: [
           Explorer.Chain.Optimism.Deposit,
           Explorer.Chain.Optimism.FrameSequence,
           Explorer.Chain.Optimism.OutputRoot,
-          Explorer.Chain.Optimism.TransactionBatch,
+          Explorer.Chain.Optimism.TxnBatch,
           Explorer.Chain.Optimism.Withdrawal,
           Explorer.Chain.Optimism.WithdrawalEvent
         ]
@@ -31,7 +31,7 @@ defmodule Indexer.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger, :os_mon],
+      extra_applications: [:logger],
       mod: {Indexer.Application, []}
     ]
   end
@@ -51,9 +51,6 @@ defmodule Indexer.MixProject do
       {:decorator, "~> 1.4"},
       # JSONRPC access to Nethermind for `Explorer.Indexer`
       {:ethereum_jsonrpc, in_umbrella: true},
-      # Brotli compression/decompression
-      {:ex_brotli, "~> 0.5.0"},
-      {:ex_keccak, "~> 0.7.5"},
       # RLP encoding
       {:ex_rlp, "~> 0.6.0"},
       # Importing to database
@@ -70,9 +67,7 @@ defmodule Indexer.MixProject do
       # `:spandex` integration with Datadog
       {:spandex_datadog, "~> 1.0"},
       {:logger_json, "~> 5.1"},
-      {:varint, "~> 1.4"},
-      {:utils, in_umbrella: true},
-      {:cachex, "~> 4.0"}
+      {:varint, "~> 1.4"}
     ]
   end
 

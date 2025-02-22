@@ -88,21 +88,22 @@ defmodule BlockScoutWeb.ChainController do
 
   def token_autocomplete(conn, %{"q" => term} = params) when is_binary(term) do
     [paging_options: paging_options] = paging_options(params)
+    offset = (max(paging_options.page_number, 1) - 1) * paging_options.page_size
 
-    {results, _} =
+    results =
       paging_options
-      |> Search.joint_search(term)
+      |> Search.joint_search(offset, term)
 
     encoded_results =
       results
       |> Enum.map(fn item ->
-        transaction_hash_bytes = Map.get(item, :transaction_hash)
+        tx_hash_bytes = Map.get(item, :tx_hash)
         block_hash_bytes = Map.get(item, :block_hash)
 
         item =
-          if transaction_hash_bytes do
+          if tx_hash_bytes do
             item
-            |> Map.replace(:transaction_hash, "0x" <> Base.encode16(transaction_hash_bytes, case: :lower))
+            |> Map.replace(:tx_hash, "0x" <> Base.encode16(tx_hash_bytes, case: :lower))
           else
             item
           end

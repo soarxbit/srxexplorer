@@ -8,7 +8,6 @@ defmodule Indexer.Fetcher.CoinBalance.CatchupTest do
   import Mox
 
   alias Explorer.Chain.{Address, Hash, Wei}
-  alias Explorer.Chain.Cache.BlockNumber
   alias Indexer.Fetcher.CoinBalance.Catchup, as: CoinBalanceCatchup
 
   @moduletag :capture_log
@@ -21,13 +20,6 @@ defmodule Indexer.Fetcher.CoinBalance.CatchupTest do
 
   setup do
     start_supervised!({Task.Supervisor, name: Indexer.TaskSupervisor})
-
-    initial_config = Application.get_env(:explorer, Explorer.Chain.Cache.BlockNumber)
-    Application.put_env(:explorer, Explorer.Chain.Cache.BlockNumber, enabled: true)
-
-    on_exit(fn ->
-      Application.put_env(:explorer, Explorer.Chain.Cache.BlockNumber, initial_config)
-    end)
 
     :ok
   end
@@ -233,8 +225,6 @@ defmodule Indexer.Fetcher.CoinBalance.CatchupTest do
         end)
       end
 
-      BlockNumber.set_max(block_number)
-
       CoinBalanceCatchup.Supervisor.Case.start_supervised!(json_rpc_named_arguments: json_rpc_named_arguments)
 
       assert :ok = CoinBalanceCatchup.async_fetch_balances([%{address_hash: hash, block_number: block_number}])
@@ -328,8 +318,6 @@ defmodule Indexer.Fetcher.CoinBalance.CatchupTest do
         {:ok, [res2]}
       end)
 
-      BlockNumber.set_max(2)
-
       case CoinBalanceCatchup.run(entries, json_rpc_named_arguments) do
         :ok ->
           balances = Repo.all(from(balance in Address.CoinBalance, where: balance.address_hash == ^hash_data))
@@ -385,8 +373,6 @@ defmodule Indexer.Fetcher.CoinBalance.CatchupTest do
         {:ok, [%{id: id, error: %{code: 1, message: "Bad"}}]}
       end)
 
-      BlockNumber.set_max(block_number())
-
       assert {:retry, ^entries} = CoinBalanceCatchup.run(entries, json_rpc_named_arguments)
     end
 
@@ -414,8 +400,6 @@ defmodule Indexer.Fetcher.CoinBalance.CatchupTest do
                               _ ->
         {:ok, [res]}
       end)
-
-      BlockNumber.set_max(block_number)
 
       assert :ok = CoinBalanceCatchup.run(entries, json_rpc_named_arguments)
     end
@@ -471,8 +455,6 @@ defmodule Indexer.Fetcher.CoinBalance.CatchupTest do
                               [] ->
         {:ok, [res_good]}
       end)
-
-      BlockNumber.set_max(good_block_number)
 
       assert {:retry, [{^address_hash_bytes, ^bad_block_number}]} =
                CoinBalanceCatchup.run(

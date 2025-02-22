@@ -8,6 +8,7 @@ defmodule BlockScoutWeb.TransactionRawTraceController do
   alias BlockScoutWeb.{AccessHelper, TransactionController}
   alias EthereumJSONRPC
   alias Explorer.{Chain, Market}
+  alias Explorer.Chain.InternalTransaction
   alias Indexer.Fetcher.OnDemand.FirstTrace, as: FirstTraceOnDemand
 
   def index(conn, %{"transaction_id" => hash_string} = params) do
@@ -29,12 +30,18 @@ defmodule BlockScoutWeb.TransactionRawTraceController do
       if is_nil(transaction.block_number) do
         render_raw_trace(conn, [], transaction, hash)
       else
-        FirstTraceOnDemand.maybe_trigger_fetch(transaction)
+        internal_transactions = InternalTransaction.all_transaction_to_internal_transactions(hash)
 
-        case Chain.fetch_transaction_raw_traces(transaction) do
-          {:ok, raw_traces} -> render_raw_trace(conn, raw_traces, transaction, hash)
-          _error -> unprocessable_entity(conn)
+        first_trace_exists =
+          Enum.find_index(internal_transactions, fn trace ->
+            trace.index == 0
+          end)
+
+        if !first_trace_exists do
+          FirstTraceOnDemand.trigger_fetch(transaction)
         end
+
+        render_raw_trace(conn, internal_transactions, transaction, hash)
       end
     else
       {:restricted_access, _} ->
@@ -48,19 +55,19 @@ defmodule BlockScoutWeb.TransactionRawTraceController do
     end
   end
 
-  defp render_raw_trace(conn, raw_traces, transaction, hash) do
+  defp render_raw_trace(conn, internal_transactions, transaction, hash) do
     render(
       conn,
       "index.html",
       exchange_rate: Market.get_coin_exchange_rate(),
-      raw_traces: raw_traces,
+      internal_transactions: internal_transactions,
       block_height: Chain.block_height(),
       current_user: current_user(conn),
       show_token_transfers: Chain.transaction_has_token_transfers?(hash),
       transaction: transaction,
       from_tags: get_address_tags(transaction.from_address_hash, current_user(conn)),
       to_tags: get_address_tags(transaction.to_address_hash, current_user(conn)),
-      transaction_tags:
+      tx_tags:
         get_transaction_with_addresses_tags(
           transaction,
           current_user(conn)

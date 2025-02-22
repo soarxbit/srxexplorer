@@ -64,7 +64,7 @@ defmodule Explorer.ExchangeRatesTest do
     set_mox_global()
 
     assert {:noreply, ^state} = ExchangeRates.handle_info(:update, state)
-    assert_receive {_, {:ok, false, [%Token{}]}}
+    assert_receive {_, {:ok, [%Token{}]}}
   end
 
   describe "ticker fetch task" do
@@ -89,11 +89,14 @@ defmodule Explorer.ExchangeRatesTest do
         image_url: nil
       }
 
+      expected_symbol = expected_token.symbol
+      expected_tuple = Token.to_tuple(expected_token)
+
       state = %{}
 
-      assert {:noreply, ^state} = ExchangeRates.handle_info({nil, {:ok, false, [expected_token]}}, state)
+      assert {:noreply, ^state} = ExchangeRates.handle_info({nil, {:ok, [expected_token]}}, state)
 
-      assert [false: ^expected_token] = :ets.lookup(ExchangeRates.table_name(), false)
+      assert [^expected_tuple] = :ets.lookup(ExchangeRates.table_name(), expected_symbol)
     end
 
     test "with failed fetch" do
@@ -111,30 +114,25 @@ defmodule Explorer.ExchangeRatesTest do
       expect(TestSource, :headers, fn -> [] end)
       set_mox_global()
 
-      assert {:noreply, ^state} = ExchangeRates.handle_info({nil, {:error, false, "some error"}}, state)
+      assert {:noreply, ^state} = ExchangeRates.handle_info({nil, {:error, "some error"}}, state)
 
       assert_receive :update
 
       assert {:noreply, ^state} = ExchangeRates.handle_info(:update, state)
-      assert_receive {_, {:ok, false, [%Token{}]}}
+      assert_receive {_, {:ok, [%Token{}]}}
     end
   end
 
   test "list/0" do
     ExchangeRates.init([])
 
-    rate_a = %Token{Token.null() | symbol: "a"}
-    rate_z = %Token{Token.null() | symbol: "z"}
-
     rates = [
-      rate_z,
-      rate_a
+      %Token{Token.null() | symbol: "z"},
+      %Token{Token.null() | symbol: "a"}
     ]
 
     expected_rates = Enum.reverse(rates)
-
-    :ets.insert(ExchangeRates.table_name(), {false, rate_z})
-    :ets.insert(ExchangeRates.table_name(), {true, rate_a})
+    for rate <- rates, do: :ets.insert(ExchangeRates.table_name(), Token.to_tuple(rate))
 
     assert expected_rates == ExchangeRates.list()
   end

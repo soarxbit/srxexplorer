@@ -1,7 +1,5 @@
-defmodule BlockScoutWeb.Account.API.V2.UserView do
-  use BlockScoutWeb, :view
-
-  alias BlockScoutWeb.Account.API.V2.AccountView
+defmodule BlockScoutWeb.Account.Api.V2.UserView do
+  alias BlockScoutWeb.Account.Api.V2.AccountView
   alias BlockScoutWeb.API.V2.Helper
   alias Ecto.Changeset
   alias Explorer.Chain
@@ -11,13 +9,7 @@ defmodule BlockScoutWeb.Account.API.V2.UserView do
   end
 
   def render("user_info.json", %{identity: identity}) do
-    %{
-      "name" => identity.name,
-      "email" => identity.email,
-      "avatar" => identity.avatar,
-      "nickname" => identity.nickname,
-      "address_hash" => identity.address_hash
-    }
+    %{"name" => identity.name, "email" => identity.email, "avatar" => identity.avatar, "nickname" => identity.nickname}
   end
 
   def render("watchlist_addresses.json", %{
@@ -169,11 +161,7 @@ defmodule BlockScoutWeb.Account.API.V2.UserView do
   def prepare_transaction_tag(nil), do: nil
 
   def prepare_transaction_tag(transaction_tag) do
-    %{
-      "id" => transaction_tag.id,
-      "transaction_hash" => transaction_tag.transaction_hash,
-      "name" => transaction_tag.name
-    }
+    %{"id" => transaction_tag.id, "transaction_hash" => transaction_tag.tx_hash, "name" => transaction_tag.name}
   end
 
   def prepare_public_tags_request(public_tags_request) do
@@ -200,9 +188,7 @@ defmodule BlockScoutWeb.Account.API.V2.UserView do
   defp get_address(address_hash) do
     case Chain.hash_to_address(
            address_hash,
-           [
-             necessity_by_association: %{:smart_contract => :optional, proxy_implementations_association() => :optional}
-           ],
+           [necessity_by_association: %{smart_contract: :optional, proxy_implementations: :optional}],
            false
          ) do
       {:ok, address} -> address

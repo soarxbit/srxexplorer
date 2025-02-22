@@ -15,7 +15,6 @@ defmodule Indexer.Fetcher.Arbitrum.Workers.NewMessagesToL2 do
   """
 
   import EthereumJSONRPC, only: [quantity_to_integer: 1]
-  alias EthereumJSONRPC.Arbitrum.Constants.Events, as: ArbitrumEvents
 
   import Explorer.Helper, only: [decode_data: 2]
 
@@ -31,6 +30,17 @@ defmodule Indexer.Fetcher.Arbitrum.Workers.NewMessagesToL2 do
   require Logger
 
   @types_of_l1_messages_forwarded_to_l2 [3, 7, 9, 12]
+
+  # keccak256("MessageDelivered(uint256,bytes32,address,uint8,address,bytes32,uint256,uint64)")
+  @message_delivered_event "0x5e3c1311ea442664e8b1611bfabef659120ea7a0a2cfc0667700bebc69cbffe1"
+  @message_delivered_event_unindexed_params [
+    :address,
+    {:uint, 8},
+    :address,
+    {:bytes, 32},
+    {:uint, 256},
+    {:uint, 64}
+  ]
 
   @doc """
   Discovers new L1-to-L2 messages initiated on L1 within a configured block range and processes them for database import.
@@ -232,7 +242,7 @@ defmodule Indexer.Fetcher.Arbitrum.Workers.NewMessagesToL2 do
         start_block,
         end_block,
         bridge_address,
-        [ArbitrumEvents.message_delivered()],
+        [@message_delivered_event],
         json_rpc_named_arguments
       )
 
@@ -271,14 +281,13 @@ defmodule Indexer.Fetcher.Arbitrum.Workers.NewMessagesToL2 do
   defp get_messages_from_logs([], _, _), do: []
 
   defp get_messages_from_logs(logs, json_rpc_named_arguments, chunk_size) do
-    {messages, transactions_requests} = parse_logs_for_l1_to_l2_messages(logs)
+    {messages, txs_requests} = parse_logs_for_l1_to_l2_messages(logs)
 
-    transactions_to_from =
-      Rpc.execute_transactions_requests_and_get_from(transactions_requests, json_rpc_named_arguments, chunk_size)
+    txs_to_from = Rpc.execute_transactions_requests_and_get_from(txs_requests, json_rpc_named_arguments, chunk_size)
 
     Enum.map(messages, fn msg ->
       Map.merge(msg, %{
-        originator_address: transactions_to_from[msg.originating_transaction_hash],
+        originator_address: txs_to_from[msg.originating_transaction_hash],
         status: :initiated
       })
     end)
@@ -298,45 +307,45 @@ defmodule Indexer.Fetcher.Arbitrum.Workers.NewMessagesToL2 do
   # ## Returns
   # - A tuple comprising:
   #   - `messages`: A list of maps, each containing an incomplete representation of a message.
-  #   - `transactions_requests`: A list of RPC request `eth_getTransactionByHash` structured to fetch
+  #   - `txs_requests`: A list of RPC request `eth_getTransactionByHash` structured to fetch
   #     additional data needed to finalize the message descriptions.
   defp parse_logs_for_l1_to_l2_messages(logs) do
-    {messages, transactions_requests} =
+    {messages, txs_requests} =
       logs
-      |> Enum.reduce({[], %{}}, fn event, {messages, transactions_requests} ->
+      |> Enum.reduce({[], %{}}, fn event, {messages, txs_requests} ->
         {msg_id, type, ts} = message_delivered_event_parse(event)
 
         if type in @types_of_l1_messages_forwarded_to_l2 do
-          transaction_hash = event["transactionHash"]
+          tx_hash = event["transactionHash"]
           blk_num = quantity_to_integer(event["blockNumber"])
 
           updated_messages = [
             %{
               direction: :to_l2,
               message_id: msg_id,
-              originating_transaction_hash: transaction_hash,
+              originating_transaction_hash: tx_hash,
               origination_timestamp: ts,
               originating_transaction_block_number: blk_num
             }
             | messages
           ]
 
-          updated_transactions_requests =
+          updated_txs_requests =
             Map.put(
-              transactions_requests,
-              transaction_hash,
-              Rpc.transaction_by_hash_request(%{id: 0, hash: transaction_hash})
+              txs_requests,
+              tx_hash,
+              Rpc.transaction_by_hash_request(%{id: 0, hash: tx_hash})
             )
 
-          log_debug("L1 to L2 message #{transaction_hash} found with the type #{type}")
+          log_debug("L1 to L2 message #{tx_hash} found with the type #{type}")
 
-          {updated_messages, updated_transactions_requests}
+          {updated_messages, updated_txs_requests}
         else
-          {messages, transactions_requests}
+          {messages, txs_requests}
         end
       end)
 
-    {messages, Map.values(transactions_requests)}
+    {messages, Map.values(txs_requests)}
   end
 
   # Parses the `MessageDelivered` event to extract relevant message details.
@@ -348,7 +357,7 @@ defmodule Indexer.Fetcher.Arbitrum.Workers.NewMessagesToL2 do
       _message_data_hash,
       _base_fee_l1,
       timestamp
-    ] = decode_data(event["data"], ArbitrumEvents.message_delivered_unindexed_params())
+    ] = decode_data(event["data"], @message_delivered_event_unindexed_params)
 
     message_index = quantity_to_integer(Enum.at(event["topics"], 1))
 

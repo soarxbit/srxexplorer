@@ -11,7 +11,6 @@ defmodule Explorer.Chain.Address.CurrentTokenBalance do
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2, limit: 2, offset: 2, order_by: 3, preload: 2, dynamic: 2]
   import Explorer.Chain.SmartContract, only: [burn_address_hash_string: 0]
-  import Explorer.Chain.SmartContract.Proxy.Models.Implementation, only: [proxy_implementations_association: 0]
 
   alias Explorer.{Chain, PagingOptions, Repo}
   alias Explorer.Chain.{Address, Block, CurrencyHelper, Hash, Token}
@@ -86,7 +85,7 @@ defmodule Explorer.Chain.Address.CurrentTokenBalance do
   def token_holders_ordered_by_value(token_contract_address_hash, options \\ []) do
     token_contract_address_hash
     |> token_holders_ordered_by_value_query_without_address_preload(options)
-    |> preload(address: [:names, :smart_contract, ^proxy_implementations_association()])
+    |> preload(address: [:names, :smart_contract, :proxy_implementations])
   end
 
   @doc """
@@ -132,7 +131,7 @@ defmodule Explorer.Chain.Address.CurrentTokenBalance do
       _ ->
         token_contract_address_hash
         |> token_holders_by_token_id_query(token_id)
-        |> preload(address: [:names, :smart_contract, ^proxy_implementations_association()])
+        |> preload(address: [:names, :smart_contract, :proxy_implementations])
         |> order_by([tb], desc: :value, desc: :address_hash)
         |> Chain.page_token_balances(paging_options)
         |> limit(^paging_options.page_size)
@@ -348,7 +347,7 @@ defmodule Explorer.Chain.Address.CurrentTokenBalance do
       |> Stream.map(fn ctb ->
         [
           Address.checksum(ctb.address_hash),
-          ctb.value |> CurrencyHelper.divide_decimals(token.decimals) |> Decimal.to_string(:xsd)
+          CurrencyHelper.divide_decimals(ctb.value, token.decimals)
         ]
       end)
 

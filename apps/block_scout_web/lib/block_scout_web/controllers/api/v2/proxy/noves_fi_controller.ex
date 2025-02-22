@@ -1,8 +1,7 @@
 defmodule BlockScoutWeb.API.V2.Proxy.NovesFiController do
   use BlockScoutWeb, :controller
 
-  alias BlockScoutWeb.API.RPC.ContractController
-  alias BlockScoutWeb.API.V2.TransactionController
+  alias BlockScoutWeb.API.V2.{AddressController, TransactionController}
   alias Explorer.ThirdPartyIntegrations.NovesFi
 
   action_fallback(BlockScoutWeb.API.V2.FallbackController)
@@ -17,7 +16,7 @@ defmodule BlockScoutWeb.API.V2.Proxy.NovesFiController do
              necessity_by_association: %{},
              api?: true
            ),
-         url = NovesFi.transaction_url(transaction_hash_string),
+         url = NovesFi.tx_url(transaction_hash_string),
          {response, status} <- NovesFi.api_request(url, conn),
          {:is_empty_response, false} <- {:is_empty_response, is_nil(response)} do
       conn
@@ -31,8 +30,8 @@ defmodule BlockScoutWeb.API.V2.Proxy.NovesFiController do
   """
   @spec address_transactions(Plug.Conn.t(), map()) :: Plug.Conn.t() | {atom(), any()}
   def address_transactions(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, _address_hash, _address} <- ContractController.validate_address(address_hash_string, params),
-         url = NovesFi.address_transactions_url(address_hash_string),
+    with {:ok, _address_hash, _address} <- AddressController.validate_address(address_hash_string, params),
+         url = NovesFi.address_txs_url(address_hash_string),
          {response, status} <- NovesFi.api_request(url, conn),
          {:is_empty_response, false} <- {:is_empty_response, is_nil(response)} do
       conn
@@ -42,11 +41,11 @@ defmodule BlockScoutWeb.API.V2.Proxy.NovesFiController do
   end
 
   @doc """
-    Function to handle GET requests to `/api/v2/proxy/noves-fi/transaction-descriptions` endpoint.
+    Function to handle GET requests to `/api/v2/proxy/noves-fi/transactions` endpoint.
   """
   @spec describe_transactions(Plug.Conn.t(), map()) :: Plug.Conn.t() | {atom(), any()}
   def describe_transactions(conn, _) do
-    url = NovesFi.describe_transactions_url()
+    url = NovesFi.describe_txs_url()
 
     with {response, status} <- NovesFi.api_request(url, conn, :post_transactions),
          {:is_empty_response, false} <- {:is_empty_response, is_nil(response)} do

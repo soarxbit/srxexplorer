@@ -28,7 +28,7 @@ defmodule Explorer.Chain.SmartContract.Proxy.Models.Implementation.Test do
 
       # fetch nil implementation and don't save it to db
       TestHelper.get_eip1967_implementation_zero_addresses()
-      assert is_nil(Implementation.get_implementation(smart_contract))
+      assert {[], []} = Implementation.get_implementation(smart_contract)
       verify!(EthereumJSONRPC.Mox)
       assert_empty_implementation(smart_contract.address_hash)
 
@@ -43,13 +43,9 @@ defmodule Explorer.Chain.SmartContract.Proxy.Models.Implementation.Test do
       string_implementation_address_hash = to_string(implementation_smart_contract.address_hash)
 
       expect_address_in_oz_slot_response(string_implementation_address_hash)
-      implementation_address_hash = implementation_smart_contract.address_hash
 
-      assert %Implementation{
-               address_hashes: [^implementation_address_hash],
-               names: ["implementation"],
-               proxy_type: :eip1967
-             } = Implementation.get_implementation(smart_contract)
+      assert {[^string_implementation_address_hash], ["implementation"]} =
+               Implementation.get_implementation(smart_contract)
 
       verify!(EthereumJSONRPC.Mox)
 
@@ -61,11 +57,8 @@ defmodule Explorer.Chain.SmartContract.Proxy.Models.Implementation.Test do
 
       TestHelper.get_eip1967_implementation_error_response()
 
-      assert %Implementation{
-               address_hashes: [^implementation_address_hash],
-               names: ["implementation"],
-               proxy_type: :eip1967
-             } = Implementation.get_implementation(smart_contract)
+      assert {[^string_implementation_address_hash], ["implementation"]} =
+               Implementation.get_implementation(smart_contract)
 
       verify!(EthereumJSONRPC.Mox)
 
@@ -85,11 +78,8 @@ defmodule Explorer.Chain.SmartContract.Proxy.Models.Implementation.Test do
 
       Application.put_env(:explorer, :proxy, proxy)
 
-      assert %Implementation{
-               address_hashes: [^implementation_address_hash],
-               names: ["implementation"],
-               proxy_type: :eip1967
-             } = Implementation.get_implementation(smart_contract)
+      assert {[^string_implementation_address_hash], ["implementation"]} =
+               Implementation.get_implementation(smart_contract)
 
       {contract_2, _} = SmartContract.address_hash_to_smart_contract_with_bytecode_twin(smart_contract.address_hash)
       implementation_2 = Implementation.get_proxy_implementations(smart_contract.address_hash)
@@ -106,24 +96,17 @@ defmodule Explorer.Chain.SmartContract.Proxy.Models.Implementation.Test do
 
       TestHelper.get_eip1967_implementation_zero_addresses()
 
-      assert is_nil(Implementation.get_implementation(smart_contract))
+      assert {[], []} = Implementation.get_implementation(smart_contract)
 
       verify!(EthereumJSONRPC.Mox)
 
       assert implementation_1.updated_at == implementation_2.updated_at &&
                contract_1.updated_at == contract_2.updated_at
-
-      proxy =
-        :explorer
-        |> Application.get_env(:proxy)
-        |> Keyword.replace(:fallback_cached_implementation_data_ttl, :timer.seconds(20))
-
-      Application.put_env(:explorer, :proxy, proxy)
     end
 
     test "get_implementation/1 for twins contract" do
       # return nils for nil
-      assert is_nil(Implementation.get_implementation(nil))
+      assert {[], []} = Implementation.get_implementation(nil)
       smart_contract = insert(:smart_contract)
       twin_address = insert(:contract_address)
 
@@ -140,15 +123,11 @@ defmodule Explorer.Chain.SmartContract.Proxy.Models.Implementation.Test do
       Application.put_env(:explorer, :proxy, proxy)
 
       # fetch nil implementation
-      assert %Implementation{address_hashes: [], names: [], proxy_type: :unknown} =
-               Implementation.get_implementation(bytecode_twin)
-
+      assert {[], []} = Implementation.get_implementation(bytecode_twin)
       verify!(EthereumJSONRPC.Mox)
       refute_implementations(smart_contract.address_hash)
 
-      assert %Implementation{address_hashes: [], names: [], proxy_type: :unknown} =
-               Implementation.get_implementation(bytecode_twin)
-
+      assert {[], []} = Implementation.get_implementation(bytecode_twin)
       verify!(EthereumJSONRPC.Mox)
       refute_implementations(smart_contract.address_hash)
 
@@ -163,13 +142,8 @@ defmodule Explorer.Chain.SmartContract.Proxy.Models.Implementation.Test do
       string_implementation_address_hash = to_string(implementation_smart_contract.address_hash)
 
       expect_address_in_oz_slot_response(string_implementation_address_hash)
-      implementation_address_hash = implementation_smart_contract.address_hash
 
-      assert %Implementation{
-               address_hashes: [^implementation_address_hash],
-               names: ["implementation"],
-               proxy_type: :eip1967
-             } =
+      assert {[^string_implementation_address_hash], ["implementation"]} =
                Implementation.get_implementation(bytecode_twin)
 
       verify!(EthereumJSONRPC.Mox)
@@ -184,11 +158,7 @@ defmodule Explorer.Chain.SmartContract.Proxy.Models.Implementation.Test do
 
       refute_implementations(smart_contract.address_hash)
 
-      assert %Implementation{
-               address_hashes: [^implementation_address_hash],
-               names: ["implementation"],
-               proxy_type: :eip1967
-             } =
+      assert {[^string_implementation_address_hash], ["implementation"]} =
                Implementation.get_implementation(bytecode_twin)
 
       verify!(EthereumJSONRPC.Mox)
@@ -201,11 +171,11 @@ defmodule Explorer.Chain.SmartContract.Proxy.Models.Implementation.Test do
       _implementation_smart_contract = insert(:smart_contract, name: "implementation")
 
       # fetch nil implementation
-      assert is_nil(Implementation.get_implementation(bytecode_twin))
+      assert {[], []} = Implementation.get_implementation(bytecode_twin)
       verify!(EthereumJSONRPC.Mox)
       refute_implementations(smart_contract.address_hash)
 
-      assert is_nil(Implementation.get_implementation(bytecode_twin))
+      assert {[], []} = Implementation.get_implementation(bytecode_twin)
       verify!(EthereumJSONRPC.Mox)
       refute_implementations(smart_contract.address_hash)
 
@@ -222,7 +192,7 @@ defmodule Explorer.Chain.SmartContract.Proxy.Models.Implementation.Test do
 
       # expect_address_in_oz_slot_response(string_implementation_address_hash)
 
-      # assert {^string_implementation_address_hash, "implementation", :eip1967} = Implementation.get_implementation(bytecode_twin)
+      # assert {^string_implementation_address_hash, "implementation"} = Implementation.get_implementation(bytecode_twin)
 
       # verify!(EthereumJSONRPC.Mox)
 
@@ -230,7 +200,7 @@ defmodule Explorer.Chain.SmartContract.Proxy.Models.Implementation.Test do
 
       # TestHelper.get_eip1967_implementation_error_response()
 
-      # assert {^string_implementation_address_hash, "implementation", :eip1967} = Implementation.get_implementation(bytecode_twin)
+      # assert {^string_implementation_address_hash, "implementation"} = Implementation.get_implementation(bytecode_twin)
 
       # verify!(EthereumJSONRPC.Mox)
 
@@ -263,12 +233,12 @@ defmodule Explorer.Chain.SmartContract.Proxy.Models.Implementation.Test do
 
       # # fetch nil implementation
       # TestHelper.get_eip1967_implementation_zero_addresses()
-      # assert {[], [], nil} = Implementation.get_implementation(bytecode_twin)
+      # assert {nil, nil} = Implementation.get_implementation(bytecode_twin)
       # verify!(EthereumJSONRPC.Mox)
       # refute_implementations(smart_contract.address_hash)
 
       # TestHelper.get_eip1967_implementation_zero_addresses()
-      # assert {[], [], nil} = Implementation.get_implementation(bytecode_twin)
+      # assert {nil, nil} = Implementation.get_implementation(bytecode_twin)
       # verify!(EthereumJSONRPC.Mox)
       # refute_implementations(smart_contract.address_hash)
 
@@ -276,7 +246,7 @@ defmodule Explorer.Chain.SmartContract.Proxy.Models.Implementation.Test do
 
       # expect_address_in_oz_slot_response(string_implementation_address_hash)
 
-      # assert {^string_implementation_address_hash, "implementation", :eip1967} = Implementation.get_implementation(bytecode_twin)
+      # assert {^string_implementation_address_hash, "implementation"} = Implementation.get_implementation(bytecode_twin)
 
       # verify!(EthereumJSONRPC.Mox)
 
@@ -284,7 +254,7 @@ defmodule Explorer.Chain.SmartContract.Proxy.Models.Implementation.Test do
 
       # TestHelper.get_eip1967_implementation_zero_addresses()
 
-      # assert {[], [], nil} = Implementation.get_implementation(bytecode_twin)
+      # assert {nil, nil} = Implementation.get_implementation(bytecode_twin)
 
       # verify!(EthereumJSONRPC.Mox)
 

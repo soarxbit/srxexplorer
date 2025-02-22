@@ -133,7 +133,7 @@ defmodule Indexer.Transform.TransactionActions do
 
       if not is_nil(protocols_to_rewrite) do
         logs
-        |> logs_group_by_transactions()
+        |> logs_group_by_txs()
         |> clear_actions(protocols_to_rewrite)
       end
 
@@ -157,7 +157,7 @@ defmodule Indexer.Transform.TransactionActions do
             Enum.member?(protocols_to_rewrite, "aave_v3")) do
       logs
       |> aave_filter_logs(String.downcase(aave_v3_pool))
-      |> logs_group_by_transactions()
+      |> logs_group_by_txs()
       |> aave(actions, chain_id)
     else
       actions
@@ -175,7 +175,7 @@ defmodule Indexer.Transform.TransactionActions do
 
       logs
       |> uniswap_filter_logs(uniswap_v3_positions_nft)
-      |> logs_group_by_transactions()
+      |> logs_group_by_txs()
       |> uniswap(actions, chain_id, uniswap_v3_positions_nft)
     else
       actions
@@ -203,9 +203,9 @@ defmodule Indexer.Transform.TransactionActions do
 
   defp aave(logs_grouped, actions, chain_id) do
     # iterate for each transaction
-    Enum.reduce(logs_grouped, actions, fn {_transaction_hash, transaction_logs}, actions_acc ->
+    Enum.reduce(logs_grouped, actions, fn {_tx_hash, tx_logs}, actions_acc ->
       # go through actions
-      Enum.reduce(transaction_logs, actions_acc, fn log, acc ->
+      Enum.reduce(tx_logs, actions_acc, fn log, acc ->
         acc ++ aave_handle_action(log, chain_id)
       end)
     end)
@@ -388,13 +388,12 @@ defmodule Indexer.Transform.TransactionActions do
     legitimate = uniswap_legitimate_pools(logs_grouped)
 
     # iterate for each transaction
-    Enum.reduce(logs_grouped, actions, fn {transaction_hash, transaction_logs}, actions_acc ->
+    Enum.reduce(logs_grouped, actions, fn {tx_hash, tx_logs}, actions_acc ->
       # trying to find `mint_nft` actions
-      actions_acc =
-        uniswap_handle_mint_nft_actions(transaction_hash, transaction_logs, actions_acc, uniswap_v3_positions_nft)
+      actions_acc = uniswap_handle_mint_nft_actions(tx_hash, tx_logs, actions_acc, uniswap_v3_positions_nft)
 
       # go through other actions
-      Enum.reduce(transaction_logs, actions_acc, fn log, acc ->
+      Enum.reduce(tx_logs, actions_acc, fn log, acc ->
         acc ++ uniswap_handle_action(log, legitimate, chain_id)
       end)
     end)
@@ -456,11 +455,11 @@ defmodule Indexer.Transform.TransactionActions do
     end
   end
 
-  defp uniswap_handle_mint_nft_actions(transaction_hash, transaction_logs, actions_acc, uniswap_v3_positions_nft) do
-    first_log = Enum.at(transaction_logs, 0)
+  defp uniswap_handle_mint_nft_actions(tx_hash, tx_logs, actions_acc, uniswap_v3_positions_nft) do
+    first_log = Enum.at(tx_logs, 0)
 
     local_acc =
-      transaction_logs
+      tx_logs
       |> Enum.reduce(%{}, fn log, acc ->
         if sanitize_first_topic(log.first_topic) == @uniswap_v3_transfer_nft_event do
           # This is Transfer event for NFT
@@ -496,7 +495,7 @@ defmodule Indexer.Transform.TransactionActions do
       end)
       |> Enum.reduce([], fn {to, %{ids: ids, log_index: log_index}}, acc ->
         action = %{
-          hash: transaction_hash,
+          hash: tx_hash,
           protocol: "uniswap_v3",
           data: %{
             name: "Uniswap V3: Positions NFT",
@@ -555,7 +554,7 @@ defmodule Indexer.Transform.TransactionActions do
 
       true ->
         Logger.error(
-          "TransactionActions: Invalid Swap event in transaction #{log.transaction_hash}. Log index: #{log.index}. amount0 = #{amount0}, amount1 = #{amount1}"
+          "TransactionActions: Invalid Swap event in tx #{log.transaction_hash}. Log index: #{log.index}. amount0 = #{amount0}, amount1 = #{amount1}"
         )
 
         {amount0, symbol0, address0, amount1, symbol1, address1, true}
@@ -608,8 +607,8 @@ defmodule Indexer.Transform.TransactionActions do
 
     {pools_to_request, pools_cached} =
       logs_grouped
-      |> Enum.reduce(%{}, fn {_transaction_hash, transaction_logs}, addresses_acc ->
-        transaction_logs
+      |> Enum.reduce(%{}, fn {_tx_hash, tx_logs}, addresses_acc ->
+        tx_logs
         |> Enum.filter(fn log ->
           sanitize_first_topic(log.first_topic) != @uniswap_v3_transfer_nft_event
         end)
@@ -779,12 +778,12 @@ defmodule Indexer.Transform.TransactionActions do
 
   defp clear_actions(logs_grouped, protocols_to_clear) do
     logs_grouped
-    |> Enum.each(fn {transaction_hash, _} ->
+    |> Enum.each(fn {tx_hash, _} ->
       query =
         if Enum.empty?(protocols_to_clear) do
-          from(ta in TransactionAction, where: ta.hash == ^transaction_hash)
+          from(ta in TransactionAction, where: ta.hash == ^tx_hash)
         else
-          from(ta in TransactionAction, where: ta.hash == ^transaction_hash and ta.protocol in ^protocols_to_clear)
+          from(ta in TransactionAction, where: ta.hash == ^tx_hash and ta.protocol in ^protocols_to_clear)
         end
 
       Repo.delete_all(query)
@@ -969,7 +968,7 @@ defmodule Indexer.Transform.TransactionActions do
     {requests, responses}
   end
 
-  defp logs_group_by_transactions(logs) do
+  defp logs_group_by_txs(logs) do
     logs
     |> Enum.group_by(& &1.transaction_hash)
   end

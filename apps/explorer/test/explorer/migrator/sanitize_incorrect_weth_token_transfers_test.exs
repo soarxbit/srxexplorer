@@ -115,8 +115,7 @@ defmodule Explorer.Migrator.SanitizeIncorrectWETHTokenTransfersTest do
 
       Application.put_env(:explorer, Explorer.Migrator.SanitizeIncorrectWETHTokenTransfers,
         batch_size: 1,
-        concurrency: 1,
-        timeout: 0
+        concurrency: 1
       )
 
       SanitizeIncorrectWETHTokenTransfers.start_link([])
@@ -133,7 +132,7 @@ defmodule Explorer.Migrator.SanitizeIncorrectWETHTokenTransfersTest do
                %{token_contract_address_hash: ^whitelisted_token_address_hash},
                %{token_contract_address_hash: ^whitelisted_token_address_hash},
                %{token_contract_address_hash: ^whitelisted_token_address_hash}
-             ] = transfers = Repo.all(TokenTransfer, order_by: [asc: :block_number, asc: :log_index])
+             ] = transfers = Repo.all(TokenTransfer)
 
       withdrawal = Enum.at(transfers, 1)
       deposit = Enum.at(transfers, 2)

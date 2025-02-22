@@ -17,10 +17,9 @@ defmodule Explorer.Chain.Cache.AddressSumMinusBurnt do
   alias Explorer.Chain.Cache.Helper
 
   defp handle_fallback(:sum_minus_burnt) do
-    # This will get the task PID if one exists, check if it's running and launch
-    # a new task if task doesn't exist or it's not running.
+    # This will get the task PID if one exists and launch a new task if not
     # See next `handle_fallback` definition
-    safe_get_async_task()
+    get_async_task()
 
     {:return, Decimal.new(0)}
   end
@@ -29,7 +28,7 @@ defmodule Explorer.Chain.Cache.AddressSumMinusBurnt do
     # If this gets called it means an async task was requested, but none exists
     # so a new one needs to be launched
     {:ok, task} =
-      Task.start_link(fn ->
+      Task.start(fn ->
         try do
           result = Etherscan.fetch_sum_coin_total_supply_minus_burnt()
 
@@ -57,7 +56,7 @@ defmodule Explorer.Chain.Cache.AddressSumMinusBurnt do
 
   # By setting this as a `callback` an async task will be started each time the
   # `sum_minus_burnt` expires (unless there is one already running)
-  defp async_task_on_deletion({:delete, _, :sum_minus_burnt}), do: safe_get_async_task()
+  defp async_task_on_deletion({:delete, _, :sum_minus_burnt}), do: get_async_task()
 
   defp async_task_on_deletion(_data), do: nil
 end

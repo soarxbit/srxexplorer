@@ -3,7 +3,7 @@ defmodule BlockScoutWeb.InternalTransactionView do
 
   alias Explorer.Chain.InternalTransaction
 
-  use Gettext, backend: BlockScoutWeb.Gettext
+  import BlockScoutWeb.Gettext
 
   @doc """
   Returns the formatted string for the type of the internal transaction.

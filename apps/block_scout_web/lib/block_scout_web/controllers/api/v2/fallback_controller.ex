@@ -3,7 +3,7 @@ defmodule BlockScoutWeb.API.V2.FallbackController do
 
   require Logger
 
-  alias BlockScoutWeb.Account.API.V2.UserView
+  alias BlockScoutWeb.Account.Api.V2.UserView
   alias BlockScoutWeb.API.V2.ApiView
   alias Ecto.Changeset
 
@@ -12,7 +12,6 @@ defmodule BlockScoutWeb.API.V2.FallbackController do
   @invalid_hash "Invalid hash"
   @invalid_number "Invalid number"
   @invalid_url "Invalid URL"
-  @invalid_celo_election_reward_type "Invalid Celo reward type, allowed types are: validator, group, voter, delegated-payment"
   @not_found "Not found"
   @contract_interaction_disabled "Contract interaction disabled"
   @restricted_access "Restricted access"
@@ -30,10 +29,9 @@ defmodule BlockScoutWeb.API.V2.FallbackController do
   @vyper_smart_contract_is_not_supported "Vyper smart-contracts are not supported by SolidityScan"
   @unverified_smart_contract "Smart-contract is unverified"
   @empty_response "Empty response"
-  @transaction_interpreter_service_disabled "Transaction Interpretation Service is disabled"
+  @tx_interpreter_service_disabled "Transaction Interpretation Service is disabled"
   @disabled "API endpoint is disabled"
   @service_disabled "Service is disabled"
-  @not_a_smart_contract "Address is not a smart-contract"
 
   def call(conn, {:format, _params}) do
     Logger.error(fn ->
@@ -99,23 +97,26 @@ defmodule BlockScoutWeb.API.V2.FallbackController do
     |> render(:message, %{message: @contract_interaction_disabled})
   end
 
-  def call(conn, {:error, {:invalid, entity}})
-      when entity in ~w(hash number celo_election_reward_type)a do
-    message =
-      case entity do
-        :hash -> @invalid_hash
-        :number -> @invalid_number
-        :celo_election_reward_type -> @invalid_celo_election_reward_type
-      end
-
+  def call(conn, {:error, {:invalid, :hash}}) do
     Logger.error(fn ->
-      ["#{message}"]
+      ["#{@invalid_hash}"]
     end)
 
     conn
     |> put_status(:unprocessable_entity)
     |> put_view(ApiView)
-    |> render(:message, %{message: message})
+    |> render(:message, %{message: @invalid_hash})
+  end
+
+  def call(conn, {:error, {:invalid, :number}}) do
+    Logger.error(fn ->
+      ["#{@invalid_number}"]
+    end)
+
+    conn
+    |> put_status(:unprocessable_entity)
+    |> put_view(ApiView)
+    |> render(:message, %{message: @invalid_number})
   end
 
   def call(conn, {:error, :not_found}) do
@@ -132,13 +133,6 @@ defmodule BlockScoutWeb.API.V2.FallbackController do
     |> put_status(:unprocessable_entity)
     |> put_view(UserView)
     |> render(:changeset_errors, changeset: changeset)
-  end
-
-  def call(conn, {:error, :badge_creation_failed}) do
-    conn
-    |> put_status(:unprocessable_entity)
-    |> put_view(UserView)
-    |> render(:message, %{message: "Badge creation failed"})
   end
 
   def call(conn, {:restricted_access, true}) do
@@ -283,6 +277,13 @@ defmodule BlockScoutWeb.API.V2.FallbackController do
     |> render(:message, %{message: @unverified_smart_contract})
   end
 
+  def call(conn, {:method, _}) do
+    conn
+    |> put_status(:not_found)
+    |> put_view(ApiView)
+    |> render(:message, %{message: @not_found})
+  end
+
   def call(conn, {:is_empty_response, true}) do
     conn
     |> put_status(500)
@@ -290,11 +291,11 @@ defmodule BlockScoutWeb.API.V2.FallbackController do
     |> render(:message, %{message: @empty_response})
   end
 
-  def call(conn, {:transaction_interpreter_enabled, false}) do
+  def call(conn, {:tx_interpreter_enabled, false}) do
     conn
     |> put_status(:forbidden)
     |> put_view(ApiView)
-    |> render(:message, %{message: @transaction_interpreter_service_disabled})
+    |> render(:message, %{message: @tx_interpreter_service_disabled})
   end
 
   def call(conn, {:disabled, _}) do
@@ -309,13 +310,6 @@ defmodule BlockScoutWeb.API.V2.FallbackController do
     |> put_status(501)
     |> put_view(ApiView)
     |> render(:message, %{message: @service_disabled})
-  end
-
-  def call(conn, {:not_a_smart_contract, _}) do
-    conn
-    |> put_status(:not_found)
-    |> put_view(ApiView)
-    |> render(:message, %{message: @not_a_smart_contract})
   end
 
   def call(conn, {code, response}) when is_integer(code) do

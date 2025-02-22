@@ -6,8 +6,12 @@ defmodule EthereumJSONRPC.WebSocket.WebSocketClientTest do
 
   import EthereumJSONRPC, only: [unique_request_id: 0]
 
-  describe "handle_disconnect/2" do
+  describe "ondisconnect/2" do
     setup :example_state
+
+    test "reconnects", %{state: state} do
+      assert {:reconnect, _, _} = WebSocketClient.ondisconnect({:closed, :remote}, state)
+    end
 
     test "treats in-progress unsubscribes as successful", %{state: state} do
       subscription_id = 1
@@ -19,7 +23,7 @@ defmodule EthereumJSONRPC.WebSocket.WebSocketClientTest do
 
       state = put_registration(state, registration)
 
-      assert {_, disconnected_state} = WebSocketClient.handle_disconnect(%{attempt_number: 1}, state)
+      assert {_, _, disconnected_state} = WebSocketClient.ondisconnect({:closed, :remote}, state)
 
       assert Enum.empty?(disconnected_state.request_id_to_registration)
       assert Enum.empty?(disconnected_state.subscription_id_to_subscription_reference)
@@ -32,7 +36,7 @@ defmodule EthereumJSONRPC.WebSocket.WebSocketClientTest do
     test "keeps :json_rpc requests for re-requesting on reconnect", %{state: state} do
       state = put_registration(state, %{type: :json_rpc, method: "eth_getBlockByNumber", params: [1, true]})
 
-      assert {_, disconnected_state} = WebSocketClient.handle_disconnect(%{attempt_number: 1}, state)
+      assert {_, _, disconnected_state} = WebSocketClient.ondisconnect({:closed, :remote}, state)
 
       assert Enum.count(disconnected_state.request_id_to_registration) == 1
     end
@@ -40,13 +44,13 @@ defmodule EthereumJSONRPC.WebSocket.WebSocketClientTest do
     test "keeps :subscribe requests for re-requesting on reconnect", %{state: state} do
       state = put_registration(state, %{type: :subscribe})
 
-      assert {_, disconnected_state} = WebSocketClient.handle_disconnect(%{attempt_number: 1}, state)
+      assert {_, _, disconnected_state} = WebSocketClient.ondisconnect({:closed, :remote}, state)
 
       assert Enum.count(disconnected_state.request_id_to_registration) == 1
     end
   end
 
-  describe "handle_frame/2" do
+  describe "websocket_handle/3" do
     setup :example_state
 
     test "Jason.decode errors are broadcast to all subscribers", %{state: %WebSocketClient{url: url} = state} do
@@ -55,12 +59,12 @@ defmodule EthereumJSONRPC.WebSocket.WebSocketClientTest do
       subscription = subscription(%{url: url, reference: subscription_reference})
       state = put_subscription(state, subscription_id, subscription)
 
-      assert {:ok, ^state} = WebSocketClient.handle_frame({:text, ""}, state)
+      assert {:ok, ^state} = WebSocketClient.websocket_handle({:text, ""}, nil, state)
       assert_receive {^subscription, {:error, %Jason.DecodeError{}}}
     end
   end
 
-  describe "terminate/2" do
+  describe "websocket_terminate/3" do
     setup :example_state
 
     test "broadcasts close to all subscribers", %{state: %WebSocketClient{url: url} = state} do
@@ -69,8 +73,8 @@ defmodule EthereumJSONRPC.WebSocket.WebSocketClientTest do
       subscription = subscription(%{url: url, reference: subscription_reference})
       state = put_subscription(state, subscription_id, subscription)
 
-      assert :ok = WebSocketClient.terminate(:close, state)
-      assert_receive {^subscription, :close}
+      assert {:ok, ^state} = WebSocketClient.websocket_handle({:text, ""}, nil, state)
+      assert_receive {^subscription, {:error, %Jason.DecodeError{}}}
     end
   end
 

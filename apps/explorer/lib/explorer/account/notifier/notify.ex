@@ -5,7 +5,7 @@ defmodule Explorer.Account.Notifier.Notify do
 
   alias Explorer.Account.Notifier.{Email, ForbiddenAddress, Summary}
   alias Explorer.Account.{WatchlistAddress, WatchlistNotification}
-  alias Explorer.Chain.Transaction
+  alias Explorer.Chain.{TokenTransfer, Transaction}
   alias Explorer.{Mailer, Repo}
 
   require Logger
@@ -20,16 +20,20 @@ defmodule Explorer.Account.Notifier.Notify do
     Enum.map(transactions, fn transaction -> process(transaction) end)
   end
 
-  defp process(%Transaction{block_timestamp: block_timestamp} = transaction) when not is_nil(block_timestamp) do
-    if DateTime.after?(block_timestamp, DateTime.add(DateTime.utc_now(), -1, :day)) do
-      Logger.debug(transaction, fetcher: :account)
+  defp process(%TokenTransfer{} = transfer) do
+    Logger.debug(transfer, fetcher: :account)
 
-      transaction
-      |> Summary.process()
-      |> Enum.map(fn summary -> notify_watchlists(summary) end)
-    else
-      nil
-    end
+    transfer
+    |> Summary.process()
+    |> Enum.map(fn summary -> notify_watchlists(summary) end)
+  end
+
+  defp process(%Transaction{} = transaction) do
+    Logger.debug(transaction, fetcher: :account)
+
+    transaction
+    |> Summary.process()
+    |> Enum.map(fn summary -> notify_watchlists(summary) end)
   end
 
   defp process(_), do: nil
@@ -125,7 +129,7 @@ defmodule Explorer.Account.Notifier.Notify do
         block_number: summary.block_number,
         amount: summary.amount,
         subject: summary.subject,
-        transaction_fee: summary.transaction_fee,
+        tx_fee: summary.tx_fee,
         name: summary.name,
         type: summary.type,
         from_address_hash_hash: hash_to_lower_case_string(summary.from_address_hash),

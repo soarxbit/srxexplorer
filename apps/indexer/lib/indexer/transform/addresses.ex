@@ -47,7 +47,6 @@ defmodule Indexer.Transform.Addresses do
         ]
       }
   """
-  use Utils.CompileTimeEnvHelper, chain_type: [:explorer, :chain_type]
 
   alias Indexer.Helper
 
@@ -74,18 +73,11 @@ defmodule Indexer.Transform.Addresses do
         %{from: :block_number, to: :fetched_coin_balance_block_number},
         %{from: :to_address_hash, to: :hash}
       ],
-      if @chain_type == :zksync do
-        [
-          %{from: :block_number, to: :fetched_coin_balance_block_number},
-          %{from: :created_contract_address_hash, to: :hash}
-        ]
-      else
-        [
-          %{from: :block_number, to: :fetched_coin_balance_block_number},
-          %{from: :created_contract_address_hash, to: :hash},
-          %{from: :created_contract_code, to: :contract_code}
-        ]
-      end
+      [
+        %{from: :block_number, to: :fetched_coin_balance_block_number},
+        %{from: :created_contract_address_hash, to: :hash},
+        %{from: :created_contract_code, to: :contract_code}
+      ]
     ],
     codes: [
       [
@@ -163,19 +155,6 @@ defmodule Indexer.Transform.Addresses do
       [
         %{from: :l2_token_address, to: :hash}
       ]
-    ],
-    celo_election_rewards: [
-      [
-        %{from: :account_address_hash, to: :hash}
-      ]
-    ],
-    celo_validator_group_votes: [
-      [
-        %{from: :account_address_hash, to: :hash}
-      ],
-      [
-        %{from: :group_address_hash, to: :hash}
-      ]
     ]
   }
 
@@ -197,7 +176,7 @@ defmodule Indexer.Transform.Addresses do
 
   Blocks have their `miner_hash` extracted.
 
-      iex> Indexer.Transform.Addresses.extract_addresses(
+      iex> Indexer.Addresses.extract_addresses(
       ...>   %{
       ...>     blocks: [
       ...>       %{
@@ -217,7 +196,7 @@ defmodule Indexer.Transform.Addresses do
   Internal transactions can have their `from_address_hash`, `to_address_hash` and/or `created_contract_address_hash`
   extracted.
 
-      iex> Indexer.Transform.Addresses.extract_addresses(
+      iex> Indexer.Addresses.extract_addresses(
       ...>   %{
       ...>     internal_transactions: [
       ...>       %{
@@ -254,7 +233,7 @@ defmodule Indexer.Transform.Addresses do
 
   Transactions can have their `from_address_hash` and/or `to_address_hash` extracted.
 
-      iex> Indexer.Transform.Addresses.extract_addresses(
+      iex> Indexer.Addresses.extract_addresses(
       ...>   %{
       ...>     transactions: [
       ...>       %{
@@ -290,7 +269,7 @@ defmodule Indexer.Transform.Addresses do
 
   Logs can have their `address_hash` extracted.
 
-      iex> Indexer.Transform.Addresses.extract_addresses(
+      iex> Indexer.Addresses.extract_addresses(
       ...>   %{
       ...>     logs: [
       ...>       %{
@@ -309,7 +288,7 @@ defmodule Indexer.Transform.Addresses do
 
   When the same address is mentioned multiple times, the greatest `block_number` is used
 
-      iex> Indexer.Transform.Addresses.extract_addresses(
+      iex> Indexer.Addresses.extract_addresses(
       ...>   %{
       ...>     blocks: [
       ...>       %{
@@ -362,7 +341,7 @@ defmodule Indexer.Transform.Addresses do
   When a contract is created and then used in internal transactions and transaction in the same fetched data, the
   `created_contract_code` is merged with the greatest `block_number`
 
-      iex> Indexer.Transform.Addresses.extract_addresses(
+      iex> Indexer.Addresses.extract_addresses(
       ...>   %{
       ...>     internal_transactions: [
       ...>       %{
@@ -488,17 +467,6 @@ defmodule Indexer.Transform.Addresses do
             %{
               optional(:l2_token_address) => String.t()
             }
-          ],
-          optional(:celo_election_rewards) => [
-            %{
-              required(:account_address_hash) => String.t()
-            }
-          ],
-          optional(:celo_validator_group_votes) => [
-            %{
-              required(:account_address_hash) => String.t(),
-              required(:group_address_hash) => String.t()
-            }
           ]
         }) :: [params]
   def extract_addresses(fetched_data, options \\ []) when is_map(fetched_data) and is_list(options) do
@@ -509,18 +477,18 @@ defmodule Indexer.Transform.Addresses do
           (entity_items = Map.get(fetched_data, entity_key)) != nil,
           do: extract_addresses_from_collection(entity_items, entity_fields, state)
 
-    transaction_actions_addresses =
+    tx_actions_addresses =
       fetched_data
       |> Map.get(:transaction_actions, [])
-      |> Enum.map(fn transaction_action ->
-        transaction_action.data
+      |> Enum.map(fn tx_action ->
+        tx_action.data
         |> Map.get(:block_number)
-        |> find_transaction_action_addresses(transaction_action.data)
+        |> find_tx_action_addresses(tx_action.data)
       end)
       |> List.flatten()
 
     addresses
-    |> Enum.concat(transaction_actions_addresses)
+    |> Enum.concat(tx_actions_addresses)
     |> List.flatten()
     |> merge_addresses()
   end
@@ -530,16 +498,16 @@ defmodule Indexer.Transform.Addresses do
 
   def extract_addresses_from_item(item, fields, state), do: Enum.flat_map(fields, &extract_fields(&1, item, state))
 
-  defp find_transaction_action_addresses(block_number, data, accumulator \\ [])
+  defp find_tx_action_addresses(block_number, data, accumulator \\ [])
 
-  defp find_transaction_action_addresses(block_number, data, accumulator) when is_map(data) or is_list(data) do
+  defp find_tx_action_addresses(block_number, data, accumulator) when is_map(data) or is_list(data) do
     Enum.reduce(data, accumulator, fn
-      {_, value}, acc -> find_transaction_action_addresses(block_number, value, acc)
-      value, acc -> find_transaction_action_addresses(block_number, value, acc)
+      {_, value}, acc -> find_tx_action_addresses(block_number, value, acc)
+      value, acc -> find_tx_action_addresses(block_number, value, acc)
     end)
   end
 
-  defp find_transaction_action_addresses(block_number, value, accumulator) when is_binary(value) do
+  defp find_tx_action_addresses(block_number, value, accumulator) when is_binary(value) do
     if Helper.address_correct?(value) do
       [%{:fetched_coin_balance_block_number => block_number, :hash => value} | accumulator]
     else
@@ -547,7 +515,7 @@ defmodule Indexer.Transform.Addresses do
     end
   end
 
-  defp find_transaction_action_addresses(_block_number, _value, accumulator), do: accumulator
+  defp find_tx_action_addresses(_block_number, _value, accumulator), do: accumulator
 
   def merge_addresses(addresses) when is_list(addresses) do
     addresses

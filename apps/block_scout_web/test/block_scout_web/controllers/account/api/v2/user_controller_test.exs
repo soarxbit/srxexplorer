@@ -2,7 +2,6 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
   use BlockScoutWeb.ConnCase
 
   alias Explorer.Account.{
-    Identity,
     TagAddress,
     TagTransaction,
     WatchlistAddress
@@ -10,11 +9,12 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
 
   alias Explorer.Chain.Address
   alias Explorer.Repo
+  alias BlockScoutWeb.Models.UserFromAuth
 
   setup %{conn: conn} do
     auth = build(:auth)
 
-    {:ok, user} = Identity.find_or_create(auth)
+    {:ok, user} = UserFromAuth.find_or_create(auth)
 
     {:ok, user: user, conn: Plug.Test.init_test_session(conn, current_user: user)}
   end
@@ -30,8 +30,7 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
                "nickname" => user.nickname,
                "name" => user.name,
                "email" => user.email,
-               "avatar" => user.avatar,
-               "address_hash" => user.address_hash
+               "avatar" => user.avatar
              }
     end
 
@@ -152,7 +151,9 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
              "name" => name,
              "address" => %{
                "hash" => Address.checksum(addr),
-               "proxy_type" => nil,
+               # todo: added for backward compatibility, remove when frontend unbound from these props
+               "implementation_address" => nil,
+               "implementation_name" => nil,
                "implementations" => [],
                "is_contract" => false,
                "is_verified" => false,
@@ -183,9 +184,7 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
         |> Map.get("items")
 
       assert Enum.all?(created, fn {_, _, map} ->
-               Enum.any?(response, fn item ->
-                 addresses_json_match?(map, item)
-               end)
+               map in response
              end)
     end
 
@@ -211,7 +210,9 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
              "name" => name,
              "address" => %{
                "hash" => Address.checksum(addr),
-               "proxy_type" => nil,
+               # todo: added for backward compatibility, remove when frontend unbound from these props
+               "implementation_address" => nil,
+               "implementation_name" => nil,
                "implementations" => [],
                "is_contract" => false,
                "is_verified" => false,
@@ -240,11 +241,7 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
         |> json_response(200)
         |> Map.get("items")
 
-      assert Enum.all?(created, fn {_, _, map} ->
-               Enum.any?(response, fn item ->
-                 addresses_json_match?(map, item)
-               end)
-             end)
+      assert Enum.all?(created, fn {_, _, map} -> map in response end)
 
       {_, _, %{"id" => id}} = Enum.at(created, 0)
 
@@ -275,32 +272,32 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
     end
 
     test "post private transaction tag", %{conn: conn} do
-      transaction_hash_non_existing = to_string(build(:transaction).hash)
-      transaction_hash = to_string(insert(:transaction).hash)
+      tx_hash_non_existing = to_string(build(:transaction).hash)
+      tx_hash = to_string(insert(:transaction).hash)
 
       assert conn
              |> post("/api/account/v2/user/tags/transaction", %{
-               "transaction_hash" => transaction_hash_non_existing,
+               "transaction_hash" => tx_hash_non_existing,
                "name" => "MyName"
              })
-             |> doc(description: "Error on try to create private transaction tag for transaction does not exist")
-             |> json_response(422) == %{"errors" => %{"transaction_hash" => ["Transaction does not exist"]}}
+             |> doc(description: "Error on try to create private transaction tag for tx does not exist")
+             |> json_response(422) == %{"errors" => %{"tx_hash" => ["Transaction does not exist"]}}
 
       tag_transaction_response =
         conn
         |> post("/api/account/v2/user/tags/transaction", %{
-          "transaction_hash" => transaction_hash,
+          "transaction_hash" => tx_hash,
           "name" => "MyName"
         })
         |> doc(description: "Create private transaction tag")
         |> json_response(200)
 
       conn
-      |> get("/api/account/v2/tags/transaction/#{transaction_hash}")
+      |> get("/api/account/v2/tags/transaction/#{tx_hash}")
       |> doc(description: "Get tags for transaction")
       |> json_response(200)
 
-      assert tag_transaction_response["transaction_hash"] == transaction_hash
+      assert tag_transaction_response["transaction_hash"] == tx_hash
       assert tag_transaction_response["name"] == "MyName"
       assert tag_transaction_response["id"]
     end
@@ -350,11 +347,11 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
     end
 
     test "edit private transaction tag", %{conn: conn} do
-      transaction_tag = build(:tag_transaction)
+      tx_tag = build(:tag_transaction)
 
       tag_response =
         conn
-        |> post("/api/account/v2/user/tags/transaction", transaction_tag)
+        |> post("/api/account/v2/user/tags/transaction", tx_tag)
         |> json_response(200)
 
       _response =
@@ -362,20 +359,20 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
         |> get("/api/account/v2/user/tags/transaction")
         |> json_response(200) == [tag_response]
 
-      assert tag_response["address_hash"] == transaction_tag["address_hash"]
-      assert tag_response["name"] == transaction_tag["name"]
+      assert tag_response["address_hash"] == tx_tag["address_hash"]
+      assert tag_response["name"] == tx_tag["name"]
       assert tag_response["id"]
 
-      new_transaction_tag = build(:tag_transaction)
+      new_tx_tag = build(:tag_transaction)
 
       new_tag_response =
         conn
-        |> put("/api/account/v2/user/tags/transaction/#{tag_response["id"]}", new_transaction_tag)
+        |> put("/api/account/v2/user/tags/transaction/#{tag_response["id"]}", new_tx_tag)
         |> doc(description: "Edit private transaction tag")
         |> json_response(200)
 
-      assert new_tag_response["address_hash"] == new_transaction_tag["address_hash"]
-      assert new_tag_response["name"] == new_transaction_tag["name"]
+      assert new_tag_response["address_hash"] == new_tx_tag["address_hash"]
+      assert new_tag_response["name"] == new_tx_tag["name"]
       assert new_tag_response["id"] == tag_response["id"]
     end
 
@@ -385,25 +382,25 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
       zipped = Enum.zip(transactions, names)
 
       created =
-        Enum.map(zipped, fn {transaction_hash, name} ->
+        Enum.map(zipped, fn {tx_hash, name} ->
           id =
             (conn
              |> post("/api/account/v2/user/tags/transaction", %{
-               "transaction_hash" => transaction_hash,
+               "transaction_hash" => tx_hash,
                "name" => name
              })
              |> json_response(200))["id"]
 
-          {transaction_hash, %{"label" => name}, %{"transaction_hash" => transaction_hash, "id" => id, "name" => name}}
+          {tx_hash, %{"label" => name}, %{"transaction_hash" => tx_hash, "id" => id, "name" => name}}
         end)
 
-      assert Enum.all?(created, fn {transaction_hash, map_tag, _} ->
+      assert Enum.all?(created, fn {tx_hash, map_tag, _} ->
                response =
                  conn
-                 |> get("/api/account/v2/tags/transaction/#{transaction_hash}")
+                 |> get("/api/account/v2/tags/transaction/#{tx_hash}")
                  |> json_response(200)
 
-               response["personal_transaction_tag"] == map_tag
+               response["personal_tx_tag"] == map_tag
              end)
 
       response =
@@ -422,25 +419,25 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
       zipped = Enum.zip(transactions, names)
 
       created =
-        Enum.map(zipped, fn {transaction_hash, name} ->
+        Enum.map(zipped, fn {tx_hash, name} ->
           id =
             (conn
              |> post("/api/account/v2/user/tags/transaction", %{
-               "transaction_hash" => transaction_hash,
+               "transaction_hash" => tx_hash,
                "name" => name
              })
              |> json_response(200))["id"]
 
-          {transaction_hash, %{"label" => name}, %{"transaction_hash" => transaction_hash, "id" => id, "name" => name}}
+          {tx_hash, %{"label" => name}, %{"transaction_hash" => tx_hash, "id" => id, "name" => name}}
         end)
 
-      assert Enum.all?(created, fn {transaction_hash, map_tag, _} ->
+      assert Enum.all?(created, fn {tx_hash, map_tag, _} ->
                response =
                  conn
-                 |> get("/api/account/v2/tags/transaction/#{transaction_hash}")
+                 |> get("/api/account/v2/tags/transaction/#{tx_hash}")
                  |> json_response(200)
 
-               response["personal_transaction_tag"] == map_tag
+               response["personal_tx_tag"] == map_tag
              end)
 
       response =
@@ -476,7 +473,7 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
                  |> json_response(200)
                  |> Map.get("items")
 
-               response["personal_transaction_tag"] == nil
+               response["personal_tx_tag"] == nil
              end)
     end
 
@@ -768,10 +765,10 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
             )
             |> Repo.preload([:token])
 
-          ctb.value
-          |> Decimal.mult(ctb.token.fiat_value)
-          |> Decimal.div(Decimal.new(10 ** Decimal.to_integer(ctb.token.decimals)))
-          |> Decimal.round(16)
+          Decimal.div(
+            Decimal.mult(ctb.value, ctb.token.fiat_value),
+            Decimal.new(10 ** Decimal.to_integer(ctb.token.decimals))
+          )
         end
 
       values_1 =
@@ -782,24 +779,24 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
             )
             |> Repo.preload([:token])
 
-          ctb.value
-          |> Decimal.mult(ctb.token.fiat_value)
-          |> Decimal.div(Decimal.new(10 ** Decimal.to_integer(ctb.token.decimals)))
-          |> Decimal.round(16)
+          Decimal.div(
+            Decimal.mult(ctb.value, ctb.token.fiat_value),
+            Decimal.new(10 ** Decimal.to_integer(ctb.token.decimals))
+          )
         end
         |> Enum.sort(fn x1, x2 -> Decimal.compare(x1, x2) in [:gt, :eq] end)
         |> Enum.take(150)
 
       [wa2, wa1] = conn |> get("/api/account/v2/user/watchlist") |> json_response(200) |> Map.get("items")
 
-      assert wa1["tokens_fiat_value"] |> Decimal.new() ==
-               values |> Enum.reduce(Decimal.new(0), fn x, acc -> Decimal.add(x, acc) end)
+      assert wa1["tokens_fiat_value"] |> Decimal.new() |> Decimal.round(13) ==
+               values |> Enum.reduce(Decimal.new(0), fn x, acc -> Decimal.add(x, acc) end) |> Decimal.round(13)
 
       assert wa1["tokens_count"] == 150
       assert wa1["tokens_overflow"] == false
 
-      assert wa2["tokens_fiat_value"] |> Decimal.new() ==
-               values_1 |> Enum.reduce(Decimal.new(0), fn x, acc -> Decimal.add(x, acc) end)
+      assert wa2["tokens_fiat_value"] |> Decimal.new() |> Decimal.round(13) ==
+               values_1 |> Enum.reduce(Decimal.new(0), fn x, acc -> Decimal.add(x, acc) end) |> Decimal.round(13)
 
       assert wa2["tokens_count"] == 150
       assert wa2["tokens_overflow"] == true
@@ -824,10 +821,10 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
             )
             |> Repo.preload([:token])
 
-          ctb.value
-          |> Decimal.mult(ctb.token.fiat_value)
-          |> Decimal.div(Decimal.new(10 ** Decimal.to_integer(ctb.token.decimals)))
-          |> Decimal.round(16)
+          Decimal.div(
+            Decimal.mult(ctb.value, ctb.token.fiat_value),
+            Decimal.new(10 ** Decimal.to_integer(ctb.token.decimals))
+          )
         end
 
       token = insert(:token, fiat_value: nil)
@@ -840,8 +837,8 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
 
       [wa1] = conn |> get("/api/account/v2/user/watchlist") |> json_response(200) |> Map.get("items")
 
-      assert wa1["tokens_fiat_value"] |> Decimal.new() ==
-               values |> Enum.reduce(Decimal.new(0), fn x, acc -> Decimal.add(x, acc) end)
+      assert wa1["tokens_fiat_value"] |> Decimal.new() |> Decimal.round(13) ==
+               values |> Enum.reduce(Decimal.new(0), fn x, acc -> Decimal.add(x, acc) end) |> Decimal.round(13)
 
       assert wa1["tokens_count"] == 150
       assert wa1["tokens_overflow"] == false
@@ -1228,7 +1225,7 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
   end
 
   defp compare_item(%TagTransaction{} = tag_transaction, json) do
-    assert json["transaction_hash"] == to_string(tag_transaction.transaction_hash)
+    assert json["transaction_hash"] == to_string(tag_transaction.tx_hash)
     assert json["name"] == tag_transaction.name
     assert json["id"] == tag_transaction.id
   end
@@ -1270,15 +1267,5 @@ defmodule BlockScoutWeb.Account.Api.V2.UserControllerTest do
     assert Enum.count(second_page_resp["items"]) == 1
     assert second_page_resp["next_page_params"] == nil
     compare_item(Enum.at(list, 0), Enum.at(second_page_resp["items"], 0))
-  end
-
-  defp addresses_json_match?(expected, actual) do
-    Enum.all?(expected, fn {key, value} ->
-      case value do
-        # Recursively compare nested maps
-        %{} -> addresses_json_match?(value, actual[key])
-        _ -> actual[key] == value
-      end
-    end)
   end
 end

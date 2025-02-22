@@ -9,28 +9,6 @@ defmodule BlockScoutWeb.API.V2.BlockControllerTest do
     Supervisor.terminate_child(Explorer.Supervisor, Explorer.Chain.Cache.Uncles.child_id())
     Supervisor.restart_child(Explorer.Supervisor, Explorer.Chain.Cache.Uncles.child_id())
 
-    Application.put_env(:explorer, Explorer.Chain.Cache.CeloCoreContracts,
-      contracts: %{
-        "addresses" => %{
-          "Accounts" => [],
-          "Election" => [],
-          "EpochRewards" => [],
-          "FeeHandler" => [],
-          "GasPriceMinimum" => [],
-          "GoldToken" => [],
-          "Governance" => [],
-          "LockedGold" => [],
-          "Reserve" => [],
-          "StableToken" => [],
-          "Validators" => []
-        }
-      }
-    )
-
-    on_exit(fn ->
-      Application.put_env(:explorer, Explorer.Chain.Cache.CeloCoreContracts, contracts: %{})
-    end)
-
     :ok
   end
 
@@ -282,14 +260,14 @@ defmodule BlockScoutWeb.API.V2.BlockControllerTest do
       assert response["next_page_params"] == nil
     end
 
-    test "get relevant transaction", %{conn: conn} do
+    test "get relevant tx", %{conn: conn} do
       10
       |> insert_list(:transaction)
       |> with_block()
 
       block = insert(:block)
 
-      transaction =
+      tx =
         :transaction
         |> insert()
         |> with_block(block)
@@ -298,21 +276,21 @@ defmodule BlockScoutWeb.API.V2.BlockControllerTest do
       assert response = json_response(request, 200)
       assert Enum.count(response["items"]) == 1
       assert response["next_page_params"] == nil
-      compare_item(transaction, Enum.at(response["items"], 0))
+      compare_item(tx, Enum.at(response["items"], 0))
 
       request = get(conn, "/api/v2/blocks/#{block.hash}/transactions")
       assert response_1 = json_response(request, 200)
       assert response_1 == response
     end
 
-    test "get transactions with working next_page_params", %{conn: conn} do
+    test "get txs with working next_page_params", %{conn: conn} do
       2
       |> insert_list(:transaction)
       |> with_block()
 
       block = insert(:block)
 
-      transactions =
+      txs =
         51
         |> insert_list(:transaction)
         |> with_block(block)
@@ -324,7 +302,7 @@ defmodule BlockScoutWeb.API.V2.BlockControllerTest do
       request_2nd_page = get(conn, "/api/v2/blocks/#{block.number}/transactions", response["next_page_params"])
       assert response_2nd_page = json_response(request_2nd_page, 200)
 
-      check_paginated_response(response, response_2nd_page, transactions)
+      check_paginated_response(response, response_2nd_page, txs)
 
       request_1 = get(conn, "/api/v2/blocks/#{block.hash}/transactions")
       assert response_1 = json_response(request_1, 200)
@@ -443,34 +421,34 @@ defmodule BlockScoutWeb.API.V2.BlockControllerTest do
       request = get(conn, "/api/v2/blocks/#{block.hash}/internal-transactions")
       assert %{"items" => [], "next_page_params" => nil} = json_response(request, 200)
 
-      transaction =
+      tx =
         :transaction
         |> insert()
         |> with_block(block)
 
       insert(:internal_transaction,
-        transaction: transaction,
+        transaction: tx,
         index: 0,
-        block_number: transaction.block_number,
-        transaction_index: transaction.index,
-        block_hash: transaction.block_hash,
+        block_number: tx.block_number,
+        transaction_index: tx.index,
+        block_hash: tx.block_hash,
         block_index: 0
       )
 
-      internal_transactions =
+      internal_txs =
         51..1
         |> Enum.map(fn index ->
-          transaction =
+          tx =
             :transaction
             |> insert()
             |> with_block(block)
 
           insert(:internal_transaction,
-            transaction: transaction,
+            transaction: tx,
             index: index,
-            block_number: transaction.block_number,
-            transaction_index: transaction.index,
-            block_hash: transaction.block_hash,
+            block_number: tx.block_number,
+            transaction_index: tx.index,
+            block_hash: tx.block_hash,
             block_index: index
           )
         end)
@@ -482,7 +460,7 @@ defmodule BlockScoutWeb.API.V2.BlockControllerTest do
 
       assert response_2nd_page = json_response(request_2nd_page, 200)
 
-      check_paginated_response(response, response_2nd_page, internal_transactions)
+      check_paginated_response(response, response_2nd_page, internal_txs)
     end
   end
 
@@ -493,7 +471,7 @@ defmodule BlockScoutWeb.API.V2.BlockControllerTest do
 
   defp compare_item(%Transaction{} = transaction, json) do
     assert to_string(transaction.hash) == json["hash"]
-    assert transaction.block_number == json["block_number"]
+    assert transaction.block_number == json["block"]
     assert to_string(transaction.value.value) == json["value"]
     assert Address.checksum(transaction.from_address_hash) == json["from"]["hash"]
     assert Address.checksum(transaction.to_address_hash) == json["to"]["hash"]
@@ -503,13 +481,13 @@ defmodule BlockScoutWeb.API.V2.BlockControllerTest do
     assert withdrawal.index == json["index"]
   end
 
-  defp compare_item(%InternalTransaction{} = internal_transaction, json) do
-    assert internal_transaction.block_number == json["block_number"]
-    assert to_string(internal_transaction.gas) == json["gas_limit"]
-    assert internal_transaction.index == json["index"]
-    assert to_string(internal_transaction.transaction_hash) == json["transaction_hash"]
-    assert Address.checksum(internal_transaction.from_address_hash) == json["from"]["hash"]
-    assert Address.checksum(internal_transaction.to_address_hash) == json["to"]["hash"]
+  defp compare_item(%InternalTransaction{} = internal_tx, json) do
+    assert internal_tx.block_number == json["block"]
+    assert to_string(internal_tx.gas) == json["gas_limit"]
+    assert internal_tx.index == json["index"]
+    assert to_string(internal_tx.transaction_hash) == json["transaction_hash"]
+    assert Address.checksum(internal_tx.from_address_hash) == json["from"]["hash"]
+    assert Address.checksum(internal_tx.to_address_hash) == json["to"]["hash"]
   end
 
   defp check_paginated_response(first_page_resp, second_page_resp, list) do

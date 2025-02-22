@@ -7,9 +7,9 @@ defmodule Indexer.Memory.Monitor do
   `c:Indexer.Memory.Shrinkable.shrink/0`.
   """
 
+  require Bitwise
   require Logger
 
-  import Bitwise
   import Indexer.Logger, only: [process: 1]
 
   alias Indexer.Memory.Shrinkable
@@ -47,16 +47,10 @@ defmodule Indexer.Memory.Monitor do
 
   @impl GenServer
   def init(options) when is_map(options) do
-    case Application.get_env(:explorer, :mode) do
-      :api ->
-        :ignore
+    state = struct!(__MODULE__, options)
+    {:ok, timer_reference} = :timer.send_interval(state.timer_interval, :check)
 
-      _other_mode ->
-        state = struct!(__MODULE__, Map.put_new(options, :limit, define_memory_limit()))
-        {:ok, timer_reference} = :timer.send_interval(state.timer_interval, :check)
-
-        {:ok, %__MODULE__{state | timer_reference: timer_reference}}
-    end
+    {:ok, %__MODULE__{state | timer_reference: timer_reference}}
   end
 
   @impl GenServer
@@ -72,14 +66,14 @@ defmodule Indexer.Memory.Monitor do
   end
 
   @impl GenServer
-  def handle_info(:check, %{limit: limit} = state) do
+  def handle_info(:check, state) do
     total = :erlang.memory(:total)
 
     set_metrics(state)
 
     shrunk_state =
-      if limit < total do
-        log_memory(%{limit: limit, total: total})
+      if memory_limit() < total do
+        log_memory(%{limit: memory_limit(), total: total})
         shrink_or_log(state)
         %{state | shrunk?: true}
       else
@@ -87,8 +81,8 @@ defmodule Indexer.Memory.Monitor do
       end
 
     final_state =
-      if state.shrunk? and total <= limit * @expandable_memory_coefficient do
-        log_expandable_memory(%{limit: limit, total: total})
+      if state.shrunk? and total <= memory_limit() * @expandable_memory_coefficient do
+        log_expandable_memory(%{limit: memory_limit(), total: total})
         expand(state)
         %{state | shrunk?: false}
       else
@@ -98,28 +92,6 @@ defmodule Indexer.Memory.Monitor do
     flush(:check)
 
     {:noreply, final_state}
-  end
-
-  defp define_memory_limit do
-    case Application.get_env(:indexer, :memory_limit) do
-      integer when is_integer(integer) -> integer
-      _not_set -> memory_limit_from_system()
-    end
-  end
-
-  defp memory_limit_from_system do
-    default_limit = 1 <<< 30
-
-    percentage =
-      case Application.get_env(:explorer, :mode) do
-        :indexer -> 100
-        :all -> Application.get_env(:indexer, :system_memory_percentage)
-      end
-
-    case :memsup.get_system_memory_data()[:total_memory] do
-      nil -> default_limit
-      total_memory -> floor(total_memory * percentage / 100)
-    end
   end
 
   defp flush(message) do
@@ -236,7 +208,7 @@ defmodule Indexer.Memory.Monitor do
   @megabytes_divisor 2 ** 20
   defp set_metrics(%__MODULE__{shrinkable_set: shrinkable_set}) do
     total_memory =
-      Enum.reduce(Enum.to_list(shrinkable_set) ++ on_demand_fetchers(), 0, fn pid, acc ->
+      Enum.reduce(shrinkable_set, 0, fn pid, acc ->
         memory = memory(pid) / @megabytes_divisor
         name = name(pid)
 
@@ -246,17 +218,6 @@ defmodule Indexer.Memory.Monitor do
       end)
 
     Instrumenter.set_memory_consumed(:total, total_memory)
-  end
-
-  defp on_demand_fetchers do
-    [Indexer.Application, Indexer.Supervisor, Explorer.Supervisor]
-    |> Enum.reject(&is_nil(Process.whereis(&1)))
-    |> Enum.flat_map(fn supervisor ->
-      supervisor
-      |> Supervisor.which_children()
-      |> Enum.filter(fn {name, _, _, _} -> is_atom(name) and String.contains?(to_string(name), "OnDemand") end)
-      |> Enum.map(fn {_, pid, _, _} -> pid end)
-    end)
   end
 
   defp name(pid) do
@@ -277,5 +238,9 @@ defmodule Indexer.Memory.Monitor do
     shrinkable_set
     |> Enum.map(fn pid -> {pid, memory(pid)} end)
     |> Enum.sort_by(&elem(&1, 1), &>=/2)
+  end
+
+  defp memory_limit do
+    Application.get_env(:indexer, :memory_limit)
   end
 end

@@ -27,7 +27,7 @@ defmodule BlockScoutWeb.BlockChannel do
       ) do
     rendered_block =
       BlockViewAPI.render("block.json", %{
-        block: block |> Repo.preload(miner: [:names, :smart_contract, proxy_implementations_association()]),
+        block: block |> Repo.preload(miner: [:names, :smart_contract, :proxy_implementations]),
         socket: nil
       })
 

@@ -24,12 +24,12 @@ defmodule EthereumJSONRPC.WebSocket.Case.Mox do
         []
       )
     end)
-    |> stub(:start_link, fn _, _ ->
+    |> stub(:start_link, fn _ ->
       Task.start_link(__MODULE__, :loop, [%{}])
     end)
 
     url = "wss://example.com/ws"
-    web_socket = start_supervised!(%{id: :ws_client, start: {web_socket_module, :start_link, [url, []]}})
+    web_socket = start_supervised!({web_socket_module, [url, [keepalive: :timer.minutes(10)]]})
 
     %{
       block_interval: @block_interval,
